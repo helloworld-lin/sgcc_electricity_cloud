@@ -41,10 +41,10 @@ jobs:
         sudo tar -xf firefox.tar -C /opt/
         sudo ln -sf /opt/firefox/firefox /usr/bin/firefox
         /usr/bin/firefox --version
-        # 下载并安装最新版本的 geckodriver
-        GECKODRIVER_VERSION=$(curl -s https://api.github.com/repos/mozilla/geckodriver/releases/latest | grep 'tag_name' | cut -d '"' -f 4)
-        wget https://github.com/mozilla/geckodriver/releases/download/$GECKODRIVER_VERSION/geckodriver-$GECKODRIVER_VERSION-linux64.tar.gz
-        tar -xvzf geckodriver-$GECKODRIVER_VERSION-linux64.tar.gz
+        # 下载并安装最新版本的 geckodriver（直接使用 release 资产的下载地址，避免解析 tag 误差）
+        GECKO_URL=$(curl -s https://api.github.com/repos/mozilla/geckodriver/releases/latest | grep browser_download_url | grep linux64.tar.gz | cut -d '"' -f 4)
+        wget -qO geckodriver.tar.gz "$GECKO_URL"
+        tar -xvzf geckodriver.tar.gz
         chmod +x geckodriver
         sudo mv geckodriver /usr/bin/
         geckodriver --version
