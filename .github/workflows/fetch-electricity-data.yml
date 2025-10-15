@@ -10,6 +10,8 @@ on:
 jobs:
   fetch-data:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     
     steps:
     - name: Checkout repository
@@ -73,9 +75,11 @@ jobs:
         python main_github.py
         
     - name: Commit and push data
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         git config --local user.email "github-actions[bot]@users.noreply.github.com"
         git config --local user.name "github-actions[bot]"
         git add data/electricity_data.json
-        git diff --quiet && git diff --staged --quiet || (git commit -m "Update electricity data $(date +'%Y-%m-%d %H:%M:%S')" && git push)
+        git diff --quiet && git diff --staged --quiet || (git commit -m "Update electricity data $(date +'%Y-%m-%d %H:%M:%S')" && git push https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git HEAD:${{ github.ref_name }})
 

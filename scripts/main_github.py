@@ -6,6 +6,7 @@ import json
 from datetime import datetime
 from const import *
 from data_fetcher import DataFetcher
+from error_watcher import ErrorWatcher
 
 def main():
     global RETRY_TIMES_LIMIT
@@ -29,6 +30,11 @@ def main():
     current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     logging.info(f"The current date is {current_datetime}.")
     
+    # 初始化错误监控目录（与容器内逻辑一致，放到 /data/errors，Actions下用工作目录下的 data/errors）
+    errors_root = os.path.abspath(os.path.join(os.getcwd(), "../data/errors"))
+    os.makedirs(errors_root, exist_ok=True)
+    ErrorWatcher.init(root_dir=errors_root)
+
     fetcher = DataFetcher(PHONE_NUMBER, PASSWORD)
     
     # 运行一次数据获取
