@@ -41,9 +41,9 @@ jobs:
         sudo tar -xf firefox.tar -C /opt/
         sudo ln -sf /opt/firefox/firefox /usr/bin/firefox
         /usr/bin/firefox --version
-        # 下载并安装最新版本的 geckodriver（使用 jq 解析 JSON 获取下载链接）
+        # 下载并安装最新版本的 geckodriver（使用 jq 解析 JSON 获取下载链接，排除 .asc 签名文件）
         sudo apt-get install -y jq
-        GECKO_URL=$(curl -s https://api.github.com/repos/mozilla/geckodriver/releases/latest | jq -r '.assets[] | select(.name | contains("linux64.tar.gz")) | .browser_download_url')
+        GECKO_URL=$(curl -s https://api.github.com/repos/mozilla/geckodriver/releases/latest | jq -r '.assets[] | select(.name | (contains("linux64.tar.gz") and (contains(".asc") | not))) | .browser_download_url')
         echo "Downloading geckodriver from: $GECKO_URL"
         curl -L -o geckodriver.tar.gz "$GECKO_URL"
         tar -xzf geckodriver.tar.gz
