@@ -1,0 +1,70 @@
+name: Fetch Electricity Data
+
+on:
+  schedule:
+    # 每天早上7点和晚上7点（北京时间）执行，使用UTC时间需要减8小时
+    - cron: '0 23 * * *'  # 北京时间早上7点 (UTC 23点前一天)
+    - cron: '0 11 * * *'  # 北京时间晚上7点 (UTC 11点)
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  fetch-data:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Install Firefox and Geckodriver
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y firefox-esr
+        # 下载并安装最新版本的geckodriver
+        GECKODRIVER_VERSION=$(curl -s https://api.github.com/repos/mozilla/geckodriver/releases/latest | grep 'tag_name' | cut -d '"' -f 4)
+        wget https://github.com/mozilla/geckodriver/releases/download/$GECKODRIVER_VERSION/geckodriver-$GECKODRIVER_VERSION-linux64.tar.gz
+        tar -xvzf geckodriver-$GECKODRIVER_VERSION-linux64.tar.gz
+        chmod +x geckodriver
+        sudo mv geckodriver /usr/bin/
+        
+    - name: Create data directory
+      run: |
+        mkdir -p data
+        
+    - name: Run data fetcher
+      env:
+        PHONE_NUMBER: ${{ secrets.PHONE_NUMBER }}
+        PASSWORD: ${{ secrets.PASSWORD }}
+        IGNORE_USER_ID: ${{ secrets.IGNORE_USER_ID }}
+        ENABLE_DATABASE_STORAGE: 'false'
+        HASS_URL: 'http://localhost:8123/'
+        HASS_TOKEN: 'dummy_token'
+        JOB_START_TIME: '07:00'
+        RETRY_WAIT_TIME_OFFSET_UNIT: '10'
+        DATA_RETENTION_DAYS: '7'
+        RECHARGE_NOTIFY: 'false'
+        BALANCE: '5.0'
+        PUSHPLUS_TOKEN: ''
+        PYTHON_IN_DOCKER: 'true'
+        VERSION: 'github-actions'
+        OUTPUT_JSON: 'true'
+      run: |
+        cd scripts
+        python main_github.py
+        
+    - name: Commit and push data
+      run: |
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        git add data/electricity_data.json
+        git diff --quiet && git diff --staged --quiet || (git commit -m "Update electricity data $(date +'%Y-%m-%d %H:%M:%S')" && git push)
+
