@@ -28,13 +28,21 @@ jobs:
     - name: Install Firefox and Geckodriver
       run: |
         sudo apt-get update
-        sudo apt-get install -y firefox-esr
-        # 下载并安装最新版本的geckodriver
+        # 基础依赖和运行时库
+        sudo apt-get install -y curl tar bzip2 ca-certificates \
+          libgtk-3-0 libdbus-glib-1-2 libasound2 libx11-xcb1 libxtst6 libxrandr2 libxss1 libnss3 fonts-liberation libgbm1
+        # 安装官方 Firefox 二进制
+        curl -L -o firefox.tar.bz2 "https://download.mozilla.org/?product=firefox-latest&os=linux64&lang=en-US"
+        sudo tar -xjf firefox.tar.bz2 -C /opt/
+        sudo ln -sf /opt/firefox/firefox /usr/bin/firefox
+        /usr/bin/firefox --version
+        # 下载并安装最新版本的 geckodriver
         GECKODRIVER_VERSION=$(curl -s https://api.github.com/repos/mozilla/geckodriver/releases/latest | grep 'tag_name' | cut -d '"' -f 4)
         wget https://github.com/mozilla/geckodriver/releases/download/$GECKODRIVER_VERSION/geckodriver-$GECKODRIVER_VERSION-linux64.tar.gz
         tar -xvzf geckodriver-$GECKODRIVER_VERSION-linux64.tar.gz
         chmod +x geckodriver
         sudo mv geckodriver /usr/bin/
+        geckodriver --version
         
     - name: Create data directory
       run: |
