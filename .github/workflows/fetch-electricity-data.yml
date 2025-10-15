@@ -28,14 +28,15 @@ jobs:
     - name: Install Firefox and Geckodriver
       run: |
         sudo apt-get update
-        # 基础依赖和运行时库
-        sudo apt-get install -y curl tar bzip2 ca-certificates \
+        # 基础依赖和运行时库（含 xz-utils 以支持 .tar.xz 解压）
+        sudo apt-get install -y curl tar bzip2 xz-utils ca-certificates \
           libgtk-3-0 libdbus-glib-1-2 libx11-xcb1 libxtst6 libxrandr2 libxss1 libnss3 fonts-liberation libgbm1
         # Ubuntu 24.04 使用 t64 套件命名，尝试安装 t64，失败则退回旧包名
         sudo apt-get install -y libasound2t64 || sudo apt-get install -y libasound2 || true
-        # 安装官方 Firefox 二进制
-        curl -L -o firefox.tar.bz2 "https://download.mozilla.org/?product=firefox-latest&os=linux64&lang=en-US"
-        sudo tar -xjf firefox.tar.bz2 -C /opt/
+        # 安装官方 Firefox 二进制（跟随重定向，获取真实下载地址，兼容 tar.bz2 / tar.xz）
+        FIREFOX_URL=$(curl -sI "https://download.mozilla.org/?product=firefox-latest&os=linux64&lang=en-US" | awk -F': ' 'tolower($1)=="location"{print $2}' | tr -d '\r')
+        curl -L -o firefox.tar "$FIREFOX_URL"
+        sudo tar -xf firefox.tar -C /opt/
         sudo ln -sf /opt/firefox/firefox /usr/bin/firefox
         /usr/bin/firefox --version
         # 下载并安装最新版本的 geckodriver
