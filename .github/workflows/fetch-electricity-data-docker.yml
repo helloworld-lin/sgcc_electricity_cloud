@@ -1,0 +1,59 @@
+name: Fetch Electricity Data (Docker)
+
+on:
+  schedule:
+    # 每天早上7点和晚上7点（北京时间）执行，使用UTC时间需要减8小时
+    - cron: '0 23 * * *'  # 北京时间早上7点 (UTC 23点前一天)
+    - cron: '0 11 * * *'  # 北京时间晚上7点 (UTC 11点)
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  fetch-data:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+      
+    - name: Create data and output directories
+      run: |
+        mkdir -p data
+        mkdir -p output
+        
+    - name: Run Docker container to fetch data
+      run: |
+        docker run --rm \
+          -e PHONE_NUMBER="${{ secrets.PHONE_NUMBER }}" \
+          -e PASSWORD="${{ secrets.PASSWORD }}" \
+          -e IGNORE_USER_ID="${{ secrets.IGNORE_USER_ID }}" \
+          -e ENABLE_DATABASE_STORAGE="false" \
+          -e HASS_URL="http://localhost:8123/" \
+          -e HASS_TOKEN="dummy_token" \
+          -e JOB_START_TIME="07:00" \
+          -e RETRY_WAIT_TIME_OFFSET_UNIT="20" \
+          -e DRIVER_IMPLICITY_WAIT_TIME="120" \
+          -e LOGIN_EXPECTED_TIME="30" \
+          -e RETRY_TIMES_LIMIT="3" \
+          -e DATA_RETENTION_DAYS="7" \
+          -e RECHARGE_NOTIFY="false" \
+          -e BALANCE="5.0" \
+          -e PUSHPLUS_TOKEN="" \
+          -e PYTHON_IN_DOCKER="true" \
+          -e VERSION="github-actions-docker" \
+          -v $(pwd)/scripts:/app/scripts:ro \
+          -v $(pwd)/data:/data \
+          registry.cn-hangzhou.aliyuncs.com/arcw/sgcc_electricity:latest \
+          python3 /app/scripts/main_github.py
+        
+    - name: Commit and push data
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        git add data/electricity_data.json
+        git diff --quiet && git diff --staged --quiet || (git commit -m "Update electricity data $(date +'%Y-%m-%d %H:%M:%S')" && git push https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git HEAD:${{ github.ref_name }})
+
+

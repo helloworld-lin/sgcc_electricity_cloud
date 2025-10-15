@@ -1,10 +1,10 @@
-name: Fetch Electricity Data
+name: Fetch Electricity Data (Deprecated - Use Docker version)
 
 on:
-  schedule:
-    # 每天早上7点和晚上7点（北京时间）执行，使用UTC时间需要减8小时
-    - cron: '0 23 * * *'  # 北京时间早上7点 (UTC 23点前一天)
-    - cron: '0 11 * * *'  # 北京时间晚上7点 (UTC 11点)
+  # schedule:
+  #   # 每天早上7点和晚上7点（北京时间）执行，使用UTC时间需要减8小时
+  #   - cron: '0 23 * * *'  # 北京时间早上7点 (UTC 23点前一天)
+  #   - cron: '0 11 * * *'  # 北京时间晚上7点 (UTC 11点)
   workflow_dispatch:  # 允许手动触发
 
 jobs:

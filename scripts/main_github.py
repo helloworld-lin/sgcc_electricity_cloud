@@ -30,8 +30,11 @@ def main():
     current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     logging.info(f"The current date is {current_datetime}.")
     
-    # 初始化错误监控目录（与容器内逻辑一致，放到 /data/errors，Actions下用工作目录下的 data/errors）
-    errors_root = os.path.abspath(os.path.join(os.getcwd(), "../data/errors"))
+    # 初始化错误监控目录（Docker中用/data/errors，否则用相对路径）
+    if os.path.exists('/data'):
+        errors_root = "/data/errors"
+    else:
+        errors_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../data/errors"))
     os.makedirs(errors_root, exist_ok=True)
     ErrorWatcher.init(root_dir=errors_root)
 
@@ -70,9 +73,13 @@ def run_task(data_fetcher: DataFetcher):
 
 def save_data_to_json(data):
     """将数据保存为JSON文件"""
-    output_dir = "../data"
-    os.makedirs(output_dir, exist_ok=True)
+    # 在 Docker 容器中使用 /data，否则使用相对路径
+    if os.path.exists('/data'):
+        output_dir = "/data"
+    else:
+        output_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../data"))
     
+    os.makedirs(output_dir, exist_ok=True)
     output_file = os.path.join(output_dir, "electricity_data.json")
     
     with open(output_file, 'w', encoding='utf-8') as f:
