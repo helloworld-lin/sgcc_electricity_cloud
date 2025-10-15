@@ -22,16 +22,33 @@ ENV PHONE_NUMBER="" \
     DATA_RETENTION_DAYS=7 \
     PYTHON_IN_DOCKER=true
 
-# 创建简单的Web服务器脚本（Render需要监听端口）
+# 创建增强的Web服务器脚本（Render需要监听端口 + 定时任务）
 RUN echo '#!/usr/bin/env python3\n\
 import os\n\
+import sys\n\
 import json\n\
+import logging\n\
 from http.server import HTTPServer, BaseHTTPRequestHandler\n\
 import subprocess\n\
 import threading\n\
 import time\n\
+import schedule\n\
+from datetime import datetime\n\
+\n\
+# 配置日志\n\
+logging.basicConfig(\n\
+    level=logging.INFO,\n\
+    format="%(asctime)s  [%(levelname)-8s] ---- %(message)s",\n\
+    datefmt="%Y-%m-%d %H:%M:%S",\n\
+    stream=sys.stdout\n\
+)\n\
 \n\
 class Handler(BaseHTTPRequestHandler):\n\
+    def log_message(self, format, *args):\n\
+        # 只记录非健康检查的请求\n\
+        if "/health" not in self.path:\n\
+            logging.info("%s - %s" % (self.address_string(), format%args))\n\
+    \n\
     def do_GET(self):\n\
         if self.path == "/health":\n\
             self.send_response(200)\n\
@@ -40,34 +57,130 @@ class Handler(BaseHTTPRequestHandler):\n\
             self.wfile.write(b"OK")\n\
         elif self.path == "/trigger":\n\
             # 手动触发数据获取\n\
-            subprocess.Popen(["python3", "/app/scripts/main_github.py"])\n\
+            logging.info("Manual trigger requested")\n\
+            threading.Thread(target=run_fetch_task).start()\n\
             self.send_response(200)\n\
             self.send_header("Content-type", "text/plain")\n\
             self.end_headers()\n\
-            self.wfile.write(b"Triggered")\n\
+            self.wfile.write(b"Triggered - Check logs for details")\n\
         elif self.path == "/data":\n\
             # 返回JSON数据\n\
             try:\n\
-                with open("/data/electricity_data.json", "r") as f:\n\
+                with open("/data/electricity_data.json", "r", encoding="utf-8") as f:\n\
                     data = f.read()\n\
                 self.send_response(200)\n\
-                self.send_header("Content-type", "application/json")\n\
+                self.send_header("Content-type", "application/json; charset=utf-8")\n\
                 self.end_headers()\n\
-                self.wfile.write(data.encode())\n\
-            except:\n\
+                self.wfile.write(data.encode("utf-8"))\n\
+            except FileNotFoundError:\n\
                 self.send_response(404)\n\
+                self.send_header("Content-type", "text/plain")\n\
                 self.end_headers()\n\
+                self.wfile.write(b"Data file not found")\n\
+            except Exception as e:\n\
+                logging.error(f"Error reading data: {e}")\n\
+                self.send_response(500)\n\
+                self.end_headers()\n\
+        elif self.path == "/logs":\n\
+            # 返回最近的日志摘要\n\
+            self.send_response(200)\n\
+            self.send_header("Content-type", "text/plain")\n\
+            self.end_headers()\n\
+            status = f"Last run: {last_run_time}\\nNext scheduled: {next_run_time}"\n\
+            self.wfile.write(status.encode())\n\
         else:\n\
             self.send_response(404)\n\
             self.end_headers()\n\
 \n\
+last_run_time = "Not run yet"\n\
+next_run_time = "Calculating..."\n\
+\n\
+def run_fetch_task():\n\
+    """运行数据获取任务"""\n\
+    global last_run_time\n\
+    try:\n\
+        logging.info("="*60)\n\
+        logging.info("Starting electricity data fetch task")\n\
+        logging.info("="*60)\n\
+        \n\
+        # 直接运行 Python 脚本并实时输出日志\n\
+        process = subprocess.Popen(\n\
+            ["python3", "/app/scripts/main_github.py"],\n\
+            stdout=subprocess.PIPE,\n\
+            stderr=subprocess.STDOUT,\n\
+            text=True,\n\
+            bufsize=1\n\
+        )\n\
+        \n\
+        # 实时输出日志\n\
+        for line in process.stdout:\n\
+            print(line, end="")\n\
+        \n\
+        process.wait()\n\
+        \n\
+        last_run_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")\n\
+        \n\
+        if process.returncode == 0:\n\
+            logging.info("="*60)\n\
+            logging.info("Data fetch task completed successfully")\n\
+            logging.info("="*60)\n\
+        else:\n\
+            logging.error(f"Data fetch task failed with return code {process.returncode}")\n\
+            \n\
+    except Exception as e:\n\
+        logging.error(f"Error running fetch task: {e}")\n\
+        import traceback\n\
+        traceback.print_exc()\n\
+\n\
+def schedule_tasks():\n\
+    """配置定时任务"""\n\
+    global next_run_time\n\
+    job_start_time = os.environ.get("JOB_START_TIME", "07:00")\n\
+    \n\
+    # 每天在指定时间运行\n\
+    schedule.every().day.at(job_start_time).do(run_fetch_task)\n\
+    \n\
+    # 12小时后再运行一次\n\
+    hour, minute = job_start_time.split(":")\n\
+    second_run_hour = (int(hour) + 12) % 24\n\
+    second_run_time = f"{second_run_hour:02d}:{minute}"\n\
+    schedule.every().day.at(second_run_time).do(run_fetch_task)\n\
+    \n\
+    logging.info(f"Scheduled tasks at {job_start_time} and {second_run_time} daily")\n\
+    \n\
+    # 启动时立即运行一次\n\
+    logging.info("Running initial data fetch...")\n\
+    run_fetch_task()\n\
+    \n\
+    # 定时任务循环\n\
+    while True:\n\
+        next_run_time = str(schedule.next_run())\n\
+        schedule.run_pending()\n\
+        time.sleep(60)\n\
+\n\
 def run_server():\n\
+    """运行HTTP服务器"""\n\
     port = int(os.environ.get("PORT", 10000))\n\
     server = HTTPServer(("0.0.0.0", port), Handler)\n\
-    print(f"Server running on port {port}")\n\
+    logging.info("="*60)\n\
+    logging.info("==> Your service is live 🎉")\n\
+    logging.info("==>")\n\
+    logging.info("==> " + "/"*50)\n\
+    logging.info("==>")\n\
+    logging.info(f"==> Available at your primary URL https://sgcc-electricity.onrender.com")\n\
+    logging.info("==>")\n\
+    logging.info("==> " + "/"*50)\n\
+    logging.info("="*60)\n\
+    logging.info(f"HTTP server running on port {port}")\n\
+    logging.info("Endpoints: /health /data /trigger /logs")\n\
     server.serve_forever()\n\
 \n\
 if __name__ == "__main__":\n\
+    # 在后台线程运行定时任务\n\
+    scheduler_thread = threading.Thread(target=schedule_tasks, daemon=True)\n\
+    scheduler_thread.start()\n\
+    \n\
+    # 主线程运行HTTP服务器\n\
     run_server()\n\
 ' > /app/server.py && chmod +x /app/server.py
 
