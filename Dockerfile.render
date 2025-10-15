@@ -1,0 +1,76 @@
+FROM registry.cn-hangzhou.aliyuncs.com/arcw/sgcc_electricity:latest
+
+# 设置工作目录
+WORKDIR /app
+
+# 复制自定义脚本
+COPY scripts/main_github.py /app/scripts/
+
+# 创建数据目录
+RUN mkdir -p /data
+
+# 环境变量（会被Render环境变量覆盖）
+ENV PHONE_NUMBER="" \
+    PASSWORD="" \
+    IGNORE_USER_ID="" \
+    ENABLE_DATABASE_STORAGE=false \
+    HASS_URL="http://localhost:8123/" \
+    HASS_TOKEN="dummy" \
+    JOB_START_TIME="07:00" \
+    RETRY_WAIT_TIME_OFFSET_UNIT=20 \
+    DRIVER_IMPLICITY_WAIT_TIME=120 \
+    DATA_RETENTION_DAYS=7 \
+    PYTHON_IN_DOCKER=true
+
+# 创建简单的Web服务器脚本（Render需要监听端口）
+RUN echo '#!/usr/bin/env python3\n\
+import os\n\
+import json\n\
+from http.server import HTTPServer, BaseHTTPRequestHandler\n\
+import subprocess\n\
+import threading\n\
+import time\n\
+\n\
+class Handler(BaseHTTPRequestHandler):\n\
+    def do_GET(self):\n\
+        if self.path == "/health":\n\
+            self.send_response(200)\n\
+            self.send_header("Content-type", "text/plain")\n\
+            self.end_headers()\n\
+            self.wfile.write(b"OK")\n\
+        elif self.path == "/trigger":\n\
+            # 手动触发数据获取\n\
+            subprocess.Popen(["python3", "/app/scripts/main_github.py"])\n\
+            self.send_response(200)\n\
+            self.send_header("Content-type", "text/plain")\n\
+            self.end_headers()\n\
+            self.wfile.write(b"Triggered")\n\
+        elif self.path == "/data":\n\
+            # 返回JSON数据\n\
+            try:\n\
+                with open("/data/electricity_data.json", "r") as f:\n\
+                    data = f.read()\n\
+                self.send_response(200)\n\
+                self.send_header("Content-type", "application/json")\n\
+                self.end_headers()\n\
+                self.wfile.write(data.encode())\n\
+            except:\n\
+                self.send_response(404)\n\
+                self.end_headers()\n\
+        else:\n\
+            self.send_response(404)\n\
+            self.end_headers()\n\
+\n\
+def run_server():\n\
+    port = int(os.environ.get("PORT", 10000))\n\
+    server = HTTPServer(("0.0.0.0", port), Handler)\n\
+    print(f"Server running on port {port}")\n\
+    server.serve_forever()\n\
+\n\
+if __name__ == "__main__":\n\
+    run_server()\n\
+' > /app/server.py && chmod +x /app/server.py
+
+# Render启动命令
+CMD ["python3", "/app/server.py"]
+

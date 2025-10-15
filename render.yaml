@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: sgcc-electricity
+    env: docker
+    dockerfilePath: ./Dockerfile.render
+    plan: free
+    region: oregon # 选择美国俄勒冈（或其他区域）
+    envVars:
+      - key: PHONE_NUMBER
+        sync: false # 需要在Render控制台手动设置
+      - key: PASSWORD
+        sync: false
+      - key: IGNORE_USER_ID
+        value: ""
+      - key: ENABLE_DATABASE_STORAGE
+        value: "false"
+      - key: HASS_URL
+        value: "http://localhost:8123/"
+      - key: HASS_TOKEN
+        value: "dummy"
+      - key: JOB_START_TIME
+        value: "07:00"
+      - key: RETRY_WAIT_TIME_OFFSET_UNIT
+        value: "20"
+      - key: DRIVER_IMPLICITY_WAIT_TIME
+        value: "120"
+      - key: DATA_RETENTION_DAYS
+        value: "7"
+      - key: PYTHON_IN_DOCKER
+        value: "true"
+    healthCheckPath: /health
+
