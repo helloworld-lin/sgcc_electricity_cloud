@@ -3,8 +3,8 @@ FROM registry.cn-hangzhou.aliyuncs.com/arcw/sgcc_electricity:latest
 # 设置工作目录
 WORKDIR /app
 
-# 复制自定义脚本
-COPY scripts/main_github.py /app/scripts/
+# 复制所有必要的脚本文件
+COPY scripts/ /app/scripts/
 
 # 创建数据目录
 RUN mkdir -p /data
